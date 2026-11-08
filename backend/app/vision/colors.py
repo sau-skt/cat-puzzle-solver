@@ -58,8 +58,12 @@ def sample_cell_color(roi: np.ndarray) -> np.ndarray:
     return np.median(chosen, axis=0)
 
 
-def cluster_lab(colors_bgr: list[np.ndarray], threshold: float = 26.0) -> list[int]:
-    """Greedy Lab clustering. Returns a label per input color, stable by first-seen order."""
+def cluster_lab(colors_bgr: list[np.ndarray], threshold: float = 16.0) -> list[int]:
+    """Greedy Lab clustering. Returns a label per input color, stable by first-seen order.
+
+    16 keeps JPEG noise in one cluster and still separates close pastels,
+    such as dusty blue and sky blue, which sit about 19 apart.
+    """
     if not colors_bgr:
         return []
     pixels = np.uint8(np.round(np.vstack(colors_bgr))).reshape(-1, 1, 3)

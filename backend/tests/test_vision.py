@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import pytest
 
+from app.vision.colors import cluster_lab
 from app.vision.pipeline import DetectionError, analyze_image
 from app.vision.synthetic import latin_color_ids, perspective_warp, render_puzzle
 
@@ -76,6 +77,13 @@ def test_noise_is_not_reported_as_a_confident_grid():
         return
     assert result.needs_review or result.overall_confidence < 0.55
     assert not (result.rows >= 8 and result.cols >= 8 and result.overall_confidence > 0.85 and not result.needs_review)
+
+
+def test_dusty_blue_and_sky_blue_stay_separate():
+    dusty = np.array([215, 191, 167], dtype=np.float32)
+    sky = np.array([231, 188, 107], dtype=np.float32)
+    labels = cluster_lab([dusty, sky, dusty, sky])
+    assert labels == [0, 1, 0, 1]
 
 
 def test_tiny_image_is_rejected():
