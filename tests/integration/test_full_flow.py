@@ -1,8 +1,11 @@
 """Signup through history for a generated puzzle screenshot."""
 
+from pathlib import Path
+
 import cv2
 import numpy as np
 
+from app.core.config import get_settings
 from app.solver.validate import CellView, validate_solution
 from app.vision.synthetic import render_puzzle
 
@@ -128,3 +131,49 @@ def test_upload_analyze_correct_solve_history_and_isolation(client, strong_passw
     assert client.get(f"/api/puzzles/{puzzle_id}").status_code == 404
     assert client.get("/api/puzzles").json()["total"] == 0
     assert owner["email"] == "owner@example.com"
+
+
+def test_new_upload_replaces_the_previous_image_and_results(client, strong_password):
+    owner = _signup(client, "replace@example.com", strong_password, "9000000003")
+    first = render_puzzle([[col for col in range(4)] for _ in range(4)], cell=40, gap=6, margin=16, header=40)
+    ok, first_png = cv2.imencode(".png", first.image)
+    assert ok
+    uploaded = client.post("/api/puzzles/upload", files={"file": ("first.png", first_png.tobytes(), "image/png")})
+    assert uploaded.status_code == 201, uploaded.text
+    puzzle_id = uploaded.json()["id"]
+    analyzed = client.post(f"/api/puzzles/{puzzle_id}/analyze")
+    assert analyzed.status_code == 200, analyzed.text
+    solved = client.post(f"/api/puzzles/{puzzle_id}/solve")
+    assert solved.status_code == 200, solved.text
+    solution_id = solved.json()["solutions"][0]["id"]
+    old_dir = Path(get_settings().storage_path) / owner["id"] / puzzle_id
+    assert old_dir.is_dir()
+
+    rejected = client.post("/api/puzzles/upload", files={"file": ("notes.txt", b"hello", "text/plain")})
+    assert rejected.status_code == 400
+    assert client.get(f"/api/puzzles/{puzzle_id}").status_code == 200
+    assert client.get(f"/api/puzzles/{puzzle_id}/solutions").json()
+
+    second = render_puzzle([[col for col in range(5)] for _ in range(5)], cell=36, gap=6, margin=16, header=36)
+    ok, second_png = cv2.imencode(".png", second.image)
+    assert ok
+    replacement = client.post("/api/puzzles/upload", files={"file": ("second.png", second_png.tobytes(), "image/png")})
+    assert replacement.status_code == 201, replacement.text
+    new_id = replacement.json()["id"]
+    assert new_id != puzzle_id
+    assert replacement.json()["original_filename"] == "second.png"
+    assert replacement.json()["status"] == "uploaded"
+    assert replacement.json()["solution_count"] == 0
+    assert replacement.json()["rows"] is None
+
+    assert client.get(f"/api/puzzles/{puzzle_id}").status_code == 404
+    assert client.get(f"/api/puzzles/{puzzle_id}/image").status_code == 404
+    assert client.get(f"/api/puzzles/{puzzle_id}/board").status_code == 404
+    assert client.get(f"/api/puzzles/{puzzle_id}/solutions/{solution_id}/image").status_code == 404
+    assert not old_dir.exists()
+
+    listing = client.get("/api/puzzles").json()
+    assert listing["total"] == 1
+    assert listing["items"][0]["id"] == new_id
+    assert client.get("/api/puzzles/stats").json()["total"] == 1
+    assert client.get(f"/api/puzzles/{new_id}/image").status_code == 200

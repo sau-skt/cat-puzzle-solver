@@ -99,6 +99,9 @@ async def create_upload(db: Session, user: User, file: UploadFile) -> PuzzleDeta
         )
     if not _pillow_accepts(data):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The file is not a valid image.")
+    previous_ids = [puzzle.id for puzzle in db.scalars(select(Puzzle).where(Puzzle.user_id == user.id)).all()]
+    for old_id in previous_ids:
+        db.delete(_owned(db, user, old_id, load_cells=True, load_solutions=True))
     puzzle_id = str(uuid4())
     relative = f"{user.id}/{puzzle_id}/original.{kind if kind != 'jpeg' else 'jpg'}"
     save_bytes(relative, data)
@@ -112,8 +115,10 @@ async def create_upload(db: Session, user: User, file: UploadFile) -> PuzzleDeta
     )
     db.add(puzzle)
     db.commit()
+    for old_id in previous_ids:
+        delete_tree(f"{user.id}/{old_id}")
     db.refresh(puzzle)
-    logger.info("Stored upload %s for user %s", puzzle.id, user.id)
+    logger.info("Stored upload %s for user %s, replacing %s", puzzle.id, user.id, len(previous_ids))
     return _detail(puzzle)
 
 

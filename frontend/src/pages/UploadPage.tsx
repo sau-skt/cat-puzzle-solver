@@ -58,7 +58,9 @@ export function UploadPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <h1 className="font-display text-4xl">Upload a puzzle</h1>
-      <p className="text-ink/70">Drop a screenshot of the colored board. Analysis starts on the next screen.</p>
+      <p className="text-ink/70">
+        Drop a screenshot of the colored board. A new upload replaces the previous image, its grid, and any saved solution.
+      </p>
       {error ? <Alert>{error}</Alert> : null}
       <label
         className="grid cursor-pointer place-items-center rounded-[28px] border border-dashed border-ink/30 bg-paper px-6 py-14 text-center"
